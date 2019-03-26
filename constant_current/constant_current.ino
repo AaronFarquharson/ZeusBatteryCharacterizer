@@ -16,9 +16,9 @@ void loop() {
   analogWrite(PWM_PIN, 200);
   delay(100);
   Serial.print("Restitor V: ");
-  Serial.print(analogRead(RESISTOR_READ)*5.0/1024);
+  Serial.print(readResistorVoltage());
   Serial.print("\tBattery V: ");
-  Serial.println(analogRead(BATTERY_READ)*5.0/1024);
+  Serial.println(readBatteryVoltage());
   
   delay(500);
 
@@ -27,7 +27,7 @@ void loop() {
   delay(1500); //Need time for the voltage on the battery to recover after the heavy current draw
   
   Serial.print("\tBattery V: ");
-  Serial.println(analogRead(BATTERY_READ)*5.0/1024);
+  Serial.println(readBatteryVoltage());
 
   delay(100);
 }
