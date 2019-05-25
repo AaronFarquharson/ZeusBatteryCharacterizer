@@ -11,15 +11,21 @@
  *  - Discharge Circuit into NO on Relay
  */
 
+/* To Do List:
+ *  - Connect second relay to make measuring battery voltage actually accurate
+ *    - Disable the discharge circuit for measurement
+ *  - Logging Output/Plotting
+ */
+
 // Pin Config
 const int PIN_RELAY = 4;
 const int PIN_BATTERY_READ = A0;
 
 // Settings Config
 const int batteryReadAverageCount = 5; // number of values to average
-const float batteryChargeMin = 4.15; // minimum value to charge up to
-const float batteryChargeMax = 4.2; // max value to charge to
-const float batteryDischargeMin = 3.6; // lowest value to discharge to
+const float batteryChargeMin = 3.67; // minimum value to charge up to
+const float batteryChargeMax = 4.2; // max value to charge to (unused currently)
+const float batteryDischargeMin = 3.3; // lowest value to discharge to
 
 // Logging Variables
 int chargeCount = 0, dischargeCount = 0;
@@ -43,7 +49,7 @@ void loop() {
 
   // check whether to charge or discharge
   if (isChargeMode) {
-    // in discharge mode
+    // in charge mode
     
     digitalWrite(PIN_RELAY, HIGH);
 
@@ -51,8 +57,10 @@ void loop() {
     if (batVoltage > batteryChargeMin) {
       // battery charged enough, discharge now
       isChargeMode = false;
+      digitalWrite(PIN_RELAY, LOW);
       
       Serial.print("Switch to Discharge\t");
+
     }
    }
 
@@ -65,6 +73,7 @@ void loop() {
     if (batVoltage < batteryDischargeMin) {
       // battery discharged to limit, charge now
       isChargeMode = true;
+      digitalWrite(PIN_RELAY, HIGH);
 
       Serial.print("Switch to Charge\t");
     }
@@ -84,7 +93,6 @@ float readBatteryVoltage() {
     value += analogRead(PIN_BATTERY_READ) *5.0/1023.0;
   }
 
-  //return value / batteryReadAverageCount;
-
-  return  analogRead(PIN_BATTERY_READ) *5.0/1023.0;
+  return value / batteryReadAverageCount;
+  //return  analogRead(PIN_BATTERY_READ) *5.0/1023.0;
 }
