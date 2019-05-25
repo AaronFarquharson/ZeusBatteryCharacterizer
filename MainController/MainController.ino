@@ -4,15 +4,12 @@
 
 /* Connection Specification:
  *  - A0: Battery Positive
- *  - D4: Relay Control (HIGH: Discharge, LOW: Charge)
+ *  - D4: Relay Control (LOW: Discharge, HIGH: Charge)
  *  
  *  - Battery Positive into COM on Relay
  *  - Charge circuit into NC on Relay
  *  - Discharge Circuit into NO on Relay
  */
-
-// Macros
-#define printVariable(x) Serial.print("x: "); Serial.print(x); Serial.print("\t");
 
 // Pin Config
 const int PIN_RELAY = 4;
@@ -41,14 +38,14 @@ void loop() {
   float batVoltage = readBatteryVoltage();
 
   // print out some info
-  printVariable(batVoltage);
-  printVariable(isChargeMode);
+  Serial.print("Battery Voltage: "); Serial.print(batVoltage); Serial.print("v \t");
+  Serial.print("Charge Mode?: "); Serial.print(isChargeMode); Serial.print("\t");
 
   // check whether to charge or discharge
   if (isChargeMode) {
     // in discharge mode
     
-    digitalWrite(PIN_RELAY, LOW);
+    digitalWrite(PIN_RELAY, HIGH);
 
     // next-state check
     if (batVoltage > batteryChargeMin) {
@@ -62,7 +59,7 @@ void loop() {
    else {
     // in discharge mode
 
-    digitalWrite(PIN_RELAY, HIGH);
+    digitalWrite(PIN_RELAY, LOW);
 
     // next-state check
     if (batVoltage < batteryDischargeMin) {
@@ -87,5 +84,7 @@ float readBatteryVoltage() {
     value += analogRead(PIN_BATTERY_READ) *5.0/1023.0;
   }
 
-  return value / batteryReadAverageCount;
+  //return value / batteryReadAverageCount;
+
+  return  analogRead(PIN_BATTERY_READ) *5.0/1023.0;
 }
