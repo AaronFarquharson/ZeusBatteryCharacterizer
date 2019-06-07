@@ -26,15 +26,15 @@
 // Pin Config
 const int PIN_CHARGE_RELAY = 5;
 const int PIN_DISCHARGE_RELAY = 4;
-const int PIN_BATTERY_READ = A0;
+const int PIN_BATTERY_READ = A1;
 
 // Settings Config
 const int batteryReadAverageCount = 5; // number of values to average
 const float batteryChargeMin = 3.67; // minimum value to charge up to
 const float batteryChargeMax = 4.2; // max value to charge to (unused currently)
-const float batteryDischargeMin = 3.3; // lowest value to discharge to
-const float batteryDischargeStabilizeTime = 15; // seconds to wait after stopping discharge to measure
-const float batteryDischargeCheckPeriod = 30; // seconds to wait after stopping discharge to measure
+const float batteryDischargeMin = 3.4; // lowest value to discharge to
+const float batteryDischargeStabilizeTime = 3000; // ms to wait after stopping discharge to measure
+const float batteryDischargeCheckPeriod = 10; // seconds to wait after stopping discharge to measure
 const int loopDelayMS = 1000; // how long to delay between main loop interations
 
 // Logging Variables
@@ -56,7 +56,7 @@ void loop() {
   float batVoltage = readBatteryVoltage();
 
   // print out some info
-  Serial.print("Battery Voltage: "); Serial.print(batVoltage); Serial.print("v \t");
+  Serial.print("Battery Voltage: "); Serial.print(batVoltage); Serial.print("V \t");
   Serial.print("FSM State (1-CHAR, 2-DISCH, 3-NONE): "); Serial.print(currentState); Serial.print("\t");
 
   // check whether to charge or discharge
@@ -70,6 +70,8 @@ void loop() {
       // battery charged enough, discharge now
       currentState = STATE_DISCHARGE;      
 
+      lastDischargeCheckTime = millis();
+
       Serial.print("Switch to Discharge\t");
 
     }
@@ -77,15 +79,33 @@ void loop() {
 
    else if (currentState == STATE_DISCHARGE) {
     // in discharge mode
+    // set to discharge mode
+    setRelayStates(STATE_DISCHARGE);
 
-    setRelayStates(STATE_CHARGE);
+    // check to see if discharge should stop (passed theshold time)
+    if (millis() - lastDischargeCheckTime >= batteryDischargeCheckPeriod * 1000) {
+      // set into literal nothing mode
+      setRelayStates(STATE_NOTHING); 
 
-    // next-state check
-    if (batVoltage < batteryDischargeMin) {
-      // battery discharged to limit, charge now
-      currentState = STATE_CHARGE;
+      // wait a while to stabilize
+      Serial.print("\nStabilize Voltage: ");
+      for (int i = 0; i < batteryDischargeStabilizeTime; i += 1000) {
+        batVoltage = readBatteryVoltage();
+        Serial.print(batVoltage);
+        Serial.print("v, ");
+        delay(1000);
+      }
+      
+      // next-state check
+      if (batVoltage < batteryDischargeMin) {
+        // battery discharged to limit, charge now
+        currentState = STATE_CHARGE;
+  
+        Serial.print("Switch to Charge\t");
+      }
 
-      Serial.print("Switch to Charge\t");
+      lastDischargeCheckTime = millis();
+
     }
 
     
@@ -102,6 +122,7 @@ float readBatteryVoltage() {
   float value = 0;
   for (int i = 0; i < batteryReadAverageCount; i++) {
     value += analogRead(PIN_BATTERY_READ) *5.0/1023.0;
+    delay(20);
   }
 
   return value / batteryReadAverageCount;
