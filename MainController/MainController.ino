@@ -4,21 +4,28 @@
 
 /* Connection Specification:
  *  - A0: Battery Positive
- *  - D4: Relay Control (LOW: Discharge, HIGH: Charge)
+ *  - D4: Discharge Relay Control (LOW: Discharge, HIGH: Disconnect)
+ *  - D5: Charge Relay Control (LOW: Charge, HIGH: Disconnect)
  *  
- *  - Battery Positive into COM on Relay
- *  - Charge circuit into NC on Relay
- *  - Discharge Circuit into NO on Relay
+ *  - Battery Positive into COM on Both Relay
+ *  - Charge Circuit into NO on Charge Relay
+ *  - Discharge Circuit into NO on Discharge Relay
  */
 
 /* To Do List:
- *  - Connect second relay to make measuring battery voltage actually accurate
+ *  - Connect second relay to make measuring battery voltage actually accurate (in progress)
  *    - Disable the discharge circuit for measurement
  *  - Logging Output/Plotting
  */
 
+// State Definitions
+#define STATE_CHARGE    1
+#define STATE_DISCHARGE 2
+#define STATE_NOTHING   3
+
 // Pin Config
-const int PIN_RELAY = 4;
+const int PIN_CHARGE_RELAY = 4;
+const int PIN_DISCHARGE_RELAY = 5;
 const int PIN_BATTERY_READ = A0;
 
 // Settings Config
@@ -26,14 +33,19 @@ const int batteryReadAverageCount = 5; // number of values to average
 const float batteryChargeMin = 3.67; // minimum value to charge up to
 const float batteryChargeMax = 4.2; // max value to charge to (unused currently)
 const float batteryDischargeMin = 3.3; // lowest value to discharge to
+const float batteryDischargeStabilizeTime = 15; // seconds to wait after stopping discharge to measure
+const float batteryDischargeCheckPeriod = 30; // seconds to wait after stopping discharge to measure
+const int loopDelayMS = 1000; // how long to delay between main loop interations
 
 // Logging Variables
 int chargeCount = 0, dischargeCount = 0;
-bool isChargeMode = true; // either in charge or discharge mode
+int currentState = STATE_CHARGE;
+long lastDischargeCheckTime = millis(); // last time to check when the discharge voltage was checked
 
 void setup() {
   // Set Pinmodes
-  pinMode(PIN_RELAY, OUTPUT);
+  pinMode(PIN_CHARGE_RELAY, OUTPUT);
+  pinMode(PIN_DISCHARGE_RELAY, OUTPUT);
 
   // Enable Serial
   Serial.begin(9600);
@@ -45,44 +57,43 @@ void loop() {
 
   // print out some info
   Serial.print("Battery Voltage: "); Serial.print(batVoltage); Serial.print("v \t");
-  Serial.print("Charge Mode?: "); Serial.print(isChargeMode); Serial.print("\t");
+  Serial.print("FSM State (1-CHAR, 2-DISCH, 3-NONE): "); Serial.print(currentState); Serial.print("\t");
 
   // check whether to charge or discharge
-  if (isChargeMode) {
+  if (currentState == STATE_CHARGE) {
     // in charge mode
     
-    digitalWrite(PIN_RELAY, HIGH);
+    setRelayStates(STATE_CHARGE);
 
     // next-state check
     if (batVoltage > batteryChargeMin) {
       // battery charged enough, discharge now
-      isChargeMode = false;
-      digitalWrite(PIN_RELAY, LOW);
-      
+      currentState = STATE_DISCHARGE;      
+
       Serial.print("Switch to Discharge\t");
 
     }
    }
 
-   else {
+   else if (currentState == STATE_DISCHARGE) {
     // in discharge mode
 
-    digitalWrite(PIN_RELAY, LOW);
+    setRelayStates(STATE_CHARGE);
 
     // next-state check
     if (batVoltage < batteryDischargeMin) {
       // battery discharged to limit, charge now
-      isChargeMode = true;
-      digitalWrite(PIN_RELAY, HIGH);
+      currentState = STATE_CHARGE;
 
       Serial.print("Switch to Charge\t");
     }
+
     
   }
 
   Serial.println("");
 
-  delay(1000);
+  delay(loopDelayMS);
   
 }
 
@@ -94,5 +105,25 @@ float readBatteryVoltage() {
   }
 
   return value / batteryReadAverageCount;
-  //return  analogRead(PIN_BATTERY_READ) *5.0/1023.0;
+  //return  analogRead(PIN_BATTERY_READ) *5.0/1023.0; // for debugging without averaging
+}
+
+void setRelayStates(int relayState) {
+  // Sets the relay outputs based on the "STATE_" state machine macros
+  switch (relayState) {
+    case STATE_CHARGE:
+      digitalWrite(PIN_CHARGE_RELAY, LOW);
+      digitalWrite(PIN_DISCHARGE_RELAY, HIGH);
+    break;
+
+    case STATE_DISCHARGE:
+      digitalWrite(PIN_CHARGE_RELAY, HIGH);
+      digitalWrite(PIN_DISCHARGE_RELAY, LOW);
+    break;
+
+    case STATE_NOTHING:
+      digitalWrite(PIN_CHARGE_RELAY, HIGH);
+      digitalWrite(PIN_DISCHARGE_RELAY, HIGH);
+    break;
+  }
 }
