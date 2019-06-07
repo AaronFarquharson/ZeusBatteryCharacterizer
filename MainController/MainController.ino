@@ -24,8 +24,8 @@
 #define STATE_NOTHING   3
 
 // Pin Config
-const int PIN_CHARGE_RELAY = 4;
-const int PIN_DISCHARGE_RELAY = 5;
+const int PIN_CHARGE_RELAY = 5;
+const int PIN_DISCHARGE_RELAY = 4;
 const int PIN_BATTERY_READ = A0;
 
 // Settings Config
