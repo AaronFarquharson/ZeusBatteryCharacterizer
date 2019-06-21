@@ -56,6 +56,33 @@ void setup() {
 }
 
 void loop() {
+  if (Serial.available()) {
+    String serialCommand = Serial.readStringUntil('\n');
+
+    if (serialCommand.equals("IDLE")) {
+      Serial.println("[INFO] Entering Idle Mode");
+
+      currentState = STATE_NOTHING;
+      
+    }
+
+    else if (serialCommand.equals("CHARGE")) {
+      Serial.println("[INFO] Entering Charge Mode");
+
+      currentState = STATE_CHARGE;
+    }
+
+    else if (serialCommand.equals("DISCHARGE")) {
+      Serial.println("[INFO] Entering Discharge Mode");
+
+      currentState = STATE_DISCHARGE;
+    }
+    
+    else {
+      Serial.print("[ERROR] Invalid Command Received: "); Serial.print(serialCommand); Serial.println("");
+    }
+  }
+  
   // check whether to charge or discharge
   float batVoltage = readBatteryVoltage();
 
@@ -123,6 +150,10 @@ void loop() {
     }
 
     
+  }
+
+  else if (currentState == STATE_NOTHING) {
+    setRelayStates(STATE_NOTHING);
   }
 
   //Serial.println("");
