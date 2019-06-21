@@ -33,7 +33,7 @@ const int batteryReadAverageCount = 5; // number of values to average
 const float batteryChargeMin = 3.67; // minimum value to charge up to
 const float batteryChargeMax = 4.2; // max value to charge to (unused currently)
 const float batteryDischargeMin = 3.4; // lowest value to discharge to
-const float batteryDischargeStabilizeTime = 3000; // ms to wait after stopping discharge to measure
+const float batteryDischargeStabilizeTime = 4000; // ms to wait after stopping discharge to measure
 const float batteryDischargeCheckPeriod = 10; // seconds to wait after stopping discharge to measure
 const int loopDelayMS = 1000; // how long to delay between main loop interations
 
@@ -41,6 +41,10 @@ const int loopDelayMS = 1000; // how long to delay between main loop interations
 int chargeCount = 0, dischargeCount = 0;
 int currentState = STATE_CHARGE;
 long lastDischargeCheckTime = millis(); // last time to check when the discharge voltage was checked
+
+long dischargeStartTime = 0;
+long chargeStartTime = 0;
+
 
 void setup() {
   // Set Pinmodes
@@ -56,8 +60,12 @@ void loop() {
   float batVoltage = readBatteryVoltage();
 
   // print out some info
-  Serial.print("Battery Voltage: "); Serial.print(batVoltage); Serial.print("V \t");
-  Serial.print("FSM State (1-CHAR, 2-DISCH, 3-NONE): "); Serial.print(currentState); Serial.print("\t");
+  Serial.print("[INFO] Battery Voltage: "); Serial.print(batVoltage); Serial.print("V \t");
+  Serial.print("FSM State (1-CHAR, 2-DISCH, 3-NONE): "); Serial.print(currentState); Serial.println("");
+
+  // Log the discharge data
+  Serial.print("[LOG] Mode=Charge, TimeMS="); Serial.print(millis()-chargeStartTime);
+  Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
 
   // check whether to charge or discharge
   if (currentState == STATE_CHARGE) {
@@ -72,8 +80,8 @@ void loop() {
 
       lastDischargeCheckTime = millis();
 
-      Serial.print("Switch to Discharge\t");
-
+      Serial.println("[INFO] Switch to Discharge\t");
+      dischargeStartTime = millis();
     }
    }
 
@@ -88,20 +96,26 @@ void loop() {
       setRelayStates(STATE_NOTHING); 
 
       // wait a while to stabilize
-      Serial.print("\nStabilize Voltage: ");
+      Serial.print("[INFO] Stabilize Voltage: ");
       for (int i = 0; i < batteryDischargeStabilizeTime; i += 1000) {
         batVoltage = readBatteryVoltage();
         Serial.print(batVoltage);
         Serial.print("v, ");
         delay(1000);
       }
+      Serial.println("");
+
+      // Log the discharge data
+      Serial.print("[LOG] Mode=Discharge, TimeMS="); Serial.print(millis()-dischargeStartTime);
+      Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
       
       // next-state check
       if (batVoltage < batteryDischargeMin) {
         // battery discharged to limit, charge now
         currentState = STATE_CHARGE;
   
-        Serial.print("Switch to Charge\t");
+        Serial.println("[INFO] Switch to Charge\t");
+        chargeStartTime = millis();
       }
 
       lastDischargeCheckTime = millis();
@@ -111,7 +125,7 @@ void loop() {
     
   }
 
-  Serial.println("");
+  //Serial.println("");
 
   delay(loopDelayMS);
   
