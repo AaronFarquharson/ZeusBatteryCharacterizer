@@ -3,7 +3,7 @@ import sys
 import glob
 import serial
 
-def serial_ports():
+def listSerialPorts():
     """ Lists serial port names
 
         :raises EnvironmentError:

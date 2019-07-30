@@ -12,16 +12,11 @@
  *  - Discharge Circuit into NO on Discharge Relay
  */
 
-/* To Do List:
- *  - Connect second relay to make measuring battery voltage actually accurate (in progress)
- *    - Disable the discharge circuit for measurement
- *  - Logging Output/Plotting
- */
 
 // State Definitions
 #define STATE_CHARGE    1
 #define STATE_DISCHARGE 2
-#define STATE_NOTHING   3
+#define STATE_IDLE      3
 
 // Pin Config
 const int PIN_CHARGE_RELAY = 5;
@@ -30,16 +25,16 @@ const int PIN_BATTERY_READ = A1;
 
 // Settings Config
 const int batteryReadAverageCount = 5; // number of values to average
-const float batteryChargeMin = 3.67; // minimum value to charge up to
-const float batteryChargeMax = 4.2; // max value to charge to (unused currently)
+const float batteryChargeMin = 4.20; // minimum value to charge up to
 const float batteryDischargeMin = 3.4; // lowest value to discharge to
 const float batteryDischargeStabilizeTime = 4000; // ms to wait after stopping discharge to measure
 const float batteryDischargeCheckPeriod = 10; // seconds to wait after stopping discharge to measure
 const int loopDelayMS = 1000; // how long to delay between main loop interations
+const int enableAutoStateChanges = false; // whether to automatically cycle from charging to discharging and back (old feature, now disabled)
 
 // Logging Variables
 int chargeCount = 0, dischargeCount = 0;
-int currentState = STATE_CHARGE;
+int currentState = STATE_IDLE;
 long lastDischargeCheckTime = millis(); // last time to check when the discharge voltage was checked
 
 long dischargeStartTime = 0;
@@ -62,7 +57,7 @@ void loop() {
     if (serialCommand.equals("IDLE")) {
       Serial.println("[INFO] Entering Idle Mode");
 
-      currentState = STATE_NOTHING;
+      currentState = STATE_IDLE;
       
     }
 
@@ -70,12 +65,17 @@ void loop() {
       Serial.println("[INFO] Entering Charge Mode");
 
       currentState = STATE_CHARGE;
+      
+      chargeStartTime = millis();
     }
 
-    else if (serialCommand.equals("DISCHARGE")) {
-      Serial.println("[INFO] Entering Discharge Mode");
+    else if (serialCommand.equals("DISCHARGE_MAX")) {
+      Serial.println("[INFO] Entering Discharge (Max Rate) Mode");
 
       currentState = STATE_DISCHARGE;
+
+      lastDischargeCheckTime = millis();
+      dischargeStartTime = millis();
     }
     
     else {
@@ -88,27 +88,39 @@ void loop() {
 
   // print out some info
   Serial.print("[INFO] Battery Voltage: "); Serial.print(batVoltage); Serial.print("V \t");
-  Serial.print("FSM State (1-CHAR, 2-DISCH, 3-NONE): "); Serial.print(currentState); Serial.println("");
+  Serial.print("FSM State (1-CHAR, 2-DISCH, 3-IDLE): "); Serial.print(currentState); Serial.println("");
 
-  // Log the discharge data
-  Serial.print("[LOG] Mode=Charge, TimeMS="); Serial.print(millis()-chargeStartTime);
-  Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
-
+  
   // check whether to charge or discharge
   if (currentState == STATE_CHARGE) {
     // in charge mode
+
+    // Log the charge data
+    Serial.print("[LOG] Mode=Charge, TimeMS="); Serial.print(millis()-chargeStartTime);
+    Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
+
     
     setRelayStates(STATE_CHARGE);
 
     // next-state check
-    if (batVoltage > batteryChargeMin) {
-      // battery charged enough, discharge now
-      currentState = STATE_DISCHARGE;      
-
-      lastDischargeCheckTime = millis();
-
-      Serial.println("[INFO] Switch to Discharge\t");
-      dischargeStartTime = millis();
+    if (batVoltage > batteryChargeMin) { // in the future, look into using the LED indicators on charge module
+      
+      // battery charged enough, discharge/idle now
+      Serial.print("[LOG] Mode=Charge, Status=Done Charging, TimeMS="); Serial.print(millis()-chargeStartTime);
+      Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
+      
+      if (enableAutoStateChanges) {
+        Serial.println("[INFO] Switch to Discharge\t");
+        currentState = STATE_DISCHARGE;
+        lastDischargeCheckTime = millis();
+        dischargeStartTime = millis();
+      }
+      else {
+        Serial.println("[INFO] Switch to Idle\t");
+        currentState = STATE_IDLE;      
+        //lastDischargeCheckTime = millis();
+        //dischargeStartTime = millis();
+      }
     }
    }
 
@@ -120,7 +132,7 @@ void loop() {
     // check to see if discharge should stop (passed theshold time)
     if (millis() - lastDischargeCheckTime >= batteryDischargeCheckPeriod * 1000) {
       // set into literal nothing mode
-      setRelayStates(STATE_NOTHING); 
+      setRelayStates(STATE_IDLE); 
 
       // wait a while to stabilize
       Serial.print("[INFO] Stabilize Voltage: ");
@@ -134,15 +146,27 @@ void loop() {
 
       // Log the discharge data
       Serial.print("[LOG] Mode=Discharge, TimeMS="); Serial.print(millis()-dischargeStartTime);
-      Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
+      Serial.print(", Voltage="); Serial.print(batVoltage);
+      Serial.print(", Current="); Serial.print(0); Serial.println("");
       
       // next-state check
       if (batVoltage < batteryDischargeMin) {
-        // battery discharged to limit, charge now
-        currentState = STATE_CHARGE;
-  
-        Serial.println("[INFO] Switch to Charge\t");
-        chargeStartTime = millis();
+        // battery discharged to limit, charge/idle now
+
+        // battery charged enough, discharge/idle now
+        Serial.print("[LOG] Mode=Discharge, Status=Done Discharging, TimeMS="); Serial.print(millis()-chargeStartTime);
+        Serial.print(", Voltage="); Serial.print(batVoltage); Serial.println("");
+      
+        if (enableAutoStateChanges) {
+          Serial.println("[INFO] Switch to Charge\t");
+          currentState = STATE_CHARGE;
+          chargeStartTime = millis();
+        }
+        else {
+          Serial.println("[INFO] Switch to Idle\t");
+          currentState = STATE_IDLE;
+          //chargeStartTime = millis();
+        }
       }
 
       lastDischargeCheckTime = millis();
@@ -152,8 +176,8 @@ void loop() {
     
   }
 
-  else if (currentState == STATE_NOTHING) {
-    setRelayStates(STATE_NOTHING);
+  else if (currentState == STATE_IDLE) {
+    setRelayStates(STATE_IDLE);
   }
 
   //Serial.println("");
@@ -187,7 +211,7 @@ void setRelayStates(int relayState) {
       digitalWrite(PIN_DISCHARGE_RELAY, LOW);
     break;
 
-    case STATE_NOTHING:
+    case STATE_IDLE:
       digitalWrite(PIN_CHARGE_RELAY, HIGH);
       digitalWrite(PIN_DISCHARGE_RELAY, HIGH);
     break;
